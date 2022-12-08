@@ -342,6 +342,7 @@ def evaluate(model, data_iterator, criterion):
     :param data_iterator: torch data iterator for the relevant subset
     :param criterion: the loss criterion used for evaluation
     :return: tuple of (average loss over all examples, average accuracy over all examples)
+    ima of amir
     """
     loss = 0
     acccuracy = 0
