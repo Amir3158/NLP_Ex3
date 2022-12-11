@@ -9,6 +9,8 @@ import data_loader
 import pickle
 
 # ------------------------------------------- Constants ----------------------------------------
+POLAR = "polar"
+RARE = "rare"
 
 SEQ_LEN = 52
 W2V_EMBEDDING_DIM = 300
@@ -246,6 +248,10 @@ class DataManager():
         self.torch_iterators = {k: DataLoader(dataset, batch_size=batch_size, shuffle=k == TRAIN)
                                 for k, dataset in self.torch_datasets.items()}
 
+        self.sentences["rare"] = get_rare_polar(self, "rare")
+        self.sentences["polar"] = get_rare_polar(self, "polar")
+
+
     def get_torch_iterator(self, data_subset=TRAIN):
         """
         :param data_subset: one of TRAIN VAL and TEST
@@ -427,7 +433,7 @@ def train_log_linear_with_one_hot():
     plt.legend()
     plt.show()
 
-    plt.plot(n_epochs, train_accuracy, color='r', label='Tra10in accuracy')
+    plt.plot(n_epochs, train_accuracy, color='r', label='Train accuracy')
     plt.plot(n_epochs, val_accuracy, color='g', label='Validation accuracy')
     plt.xlabel("Number of Epochs")
     plt.ylabel("Accuracy")
@@ -436,11 +442,47 @@ def train_log_linear_with_one_hot():
     plt.show()
 
     test_loss, test_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=TEST), nn.BCEWithLogitsLoss())
+    rare_loss, rare_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=RARE), nn.BCEWithLogitsLoss())
+    polar_loss, polar_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=POLAR), nn.BCEWithLogitsLoss())
+
+    plt.plot(n_epochs, test_loss, color='r', label='Overall test loss')
+    plt.plot(n_epochs, rare_loss, color='g', label='Test loss over rare words')
+    plt.plot(n_epochs, polar_loss, color='b', label='Test loss over polar words')
+
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Loss")
+    plt.title("Test loss")
+    plt.legend()
+    plt.show()
+
+    plt.plot(n_epochs, test_accuracy, color='r', label='Overall test accuracy')
+    plt.plot(n_epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
+    plt.plot(n_epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
+
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("accuracy")
+    plt.title("Test accuracy")
+    plt.legend()
+    plt.show()
 
 
-def get_rare_polar(m, dm, subset):
-    test_data = dm.get_torch_iterator(data_subset=TEST)
-    return
+
+def get_rare_polar(dm, subset):
+    test_data = dm.sentiment_dataset.get_test_set()
+
+    if subset == RARE:
+        ind = data_loader.get_rare_words_examples(test_data, dm.sentiment_dataset)
+
+    elif subset == POLAR:
+        ind = data_loader.get_negated_polarity_examples(test_data, dm.sentiment_dataset)
+
+    res = []
+    for i in ind:
+        res.append(test_data[i])
+
+    return res
+
+
 
 
 
