@@ -437,7 +437,7 @@ def train_log_linear_with_one_hot():
 
 def get_rare_polar(m, dm, subset):
     test_data = dm.get_torch_iterator(data_subset=TEST)
-    test_sentences =
+    return
 
 
 
