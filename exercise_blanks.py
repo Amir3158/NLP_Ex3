@@ -347,6 +347,7 @@ def evaluate(model, data_iterator, criterion):
     loss = 0
     acccuracy = 0
     num_of_samples = len(data_iterator)
+
     with torch.no_grad():
         for (X,y) in data_iterator:
             pred = model.predict(X)
@@ -354,6 +355,7 @@ def evaluate(model, data_iterator, criterion):
             acccuracy += binary_accuracy(pred, y)
     loss /= num_of_samples
     acccuracy /= num_of_samples
+
     print(f"Test Error: \n Accuracy: {(100 * acccuracy):>0.1f}%, Avg loss: {loss:>8f} \n")
     return loss, acccuracy
 
