@@ -28,7 +28,7 @@ TEST = "test"
 
 def get_available_device():
     """
-    Allows training on GPU if available. Can help with running things faster when a GPU with cuda is
+    Allows training_oh on GPU if available. Can help with running things faster when a GPU with cuda is
     available but not a most...
     Given a device, one can use module.to(device)
     and criterion.to(device) so that all the computations will be done on the GPU.
@@ -48,9 +48,9 @@ def load_pickle(path):
 
 def save_model(model, path, epoch, optimizer):
     """
-    Utility function for saving checkpoint of a model, so training or evaluation can be executed later on.
+    Utility function for saving checkpoint of a model, so training_oh or evaluation can be executed later on.
     :param model: torch module representing the model
-    :param optimizer: torch optimizer used for training the module
+    :param optimizer: torch optimizer used for training_oh the module
     :param path: path to save the checkpoint into
     """
     torch.save({
@@ -88,7 +88,7 @@ def load_word2vec():
     return wv_from_bin
 
 
-def create_or_load_slim_w2v(words_list, cache_w2v=False):
+def create_or_load_slim_w2v(words_list, cache_w2v=True):
     """
     returns word2vec dict only for words which appear in the dataset.
     :param words_list: list of words to use for the w2v dict
@@ -115,7 +115,11 @@ def get_w2v_average(sent, word_to_vec, embedding_dim):
     :param embedding_dim: the dimension of the word embedding vectors
     :return The average embedding vector as numpy ndarray.
     """
-    return
+    output = np.zeros(embedding_dim, dtype='float32')
+    num_of_words = len(sent.text)
+    for w in sent.text:
+        output += word_to_vec.get(w, np.zeros(embedding_dim, dtype='float32'))
+    return output / num_of_words
 
 
 def get_one_hot(size, ind):
@@ -139,9 +143,10 @@ def average_one_hots(sent, word_to_ind):
     :return:
     """
     output = np.zeros(len(word_to_ind), dtype='float32')
+    num_of_words = len(sent.text)
     for w in sent.text:
         output += get_one_hot(len(word_to_ind), word_to_ind[w])
-    return output / len(word_to_ind)
+    return output / num_of_words
 
 
 def get_word_to_ind(words_list):
@@ -194,7 +199,7 @@ class OnlineDataset(Dataset):
 
 class DataManager():
     """
-    Utility class for handling all data management task. Can be used to get iterators for training and
+    Utility class for handling all data management task. Can be used to get iterators for training_oh and
     evaluation.
     """
 
@@ -202,9 +207,9 @@ class DataManager():
                  batch_size=50,
                  embedding_dim=None):
         """
-        builds the data manager used for training and evaluation.
+        builds the data manager used for training_oh and evaluation.
         :param data_type: one of ONEHOT_AVERAGE, W2V_AVERAGE and W2V_SEQUENCE
-        :param use_sub_phrases: if true, training data will include all sub-phrases plus the full sentences
+        :param use_sub_phrases: if true, training_oh data will include all sub-phrases plus the full sentences
         :param dataset_path: path to the dataset directory
         :param batch_size: number of examples per batch
         :param embedding_dim: relevant only for the W2V data types.
@@ -221,7 +226,8 @@ class DataManager():
 
         self.sentences[VAL] = self.sentiment_dataset.get_validation_set()
         self.sentences[TEST] = self.sentiment_dataset.get_test_set()
-
+        self.sentences["rare"] = get_rare_polar(self, "rare")
+        self.sentences["polar"] = get_rare_polar(self, "polar")
         # map data splits to sentence input preperation functions
         words_list = list(self.sentiment_dataset.get_word_counts().keys())
         if data_type == ONEHOT_AVERAGE:
@@ -243,13 +249,13 @@ class DataManager():
         else:
             raise ValueError("invalid data_type: {}".format(data_type))
         # map data splits to torch datasets and iterators
+
         self.torch_datasets = {k: OnlineDataset(sentences, self.sent_func, self.sent_func_kwargs) for
                                k, sentences in self.sentences.items()}
         self.torch_iterators = {k: DataLoader(dataset, batch_size=batch_size, shuffle=k == TRAIN)
                                 for k, dataset in self.torch_datasets.items()}
 
-        self.sentences["rare"] = get_rare_polar(self, "rare")
-        self.sentences["polar"] = get_rare_polar(self, "polar")
+
 
 
     def get_torch_iterator(self, data_subset=TRAIN):
@@ -301,13 +307,13 @@ class LogLinear(nn.Module):
         self.module = nn.Linear(embedding_dim, 1)
 
     def forward(self, x):
-        return self.module(x)
+        return self.module.forward(x)
 
     def predict(self, x):
         return torch.sigmoid(self.module(x))
 
 
-# ------------------------- training functions -------------
+# ------------------------- training_oh functions -------------
 
 
 def binary_accuracy(preds, y):
@@ -321,31 +327,27 @@ def binary_accuracy(preds, y):
     assert preds.size() == y.size()
     correct = 0
     for i, p in enumerate(preds):
-        if torch.round(p) == y[i]:
+        if torch.round(torch.sigmoid(p)) == y[i]:
             correct += 1
     return correct / len(y)
 
 
 def train_epoch(model, data_iterator, optimizer, criterion):
     """
-    This method operates one epoch (pass over the whole train set) of training of the given model,
+    This method operates one epoch (pass over the whole train set) of training_oh of the given model,
     and returns the accuracy and loss for this epoch
-    :param model: the model we're currently training
-    :param data_iterator: an iterator, iterating over the training data for the model.
-    :param optimizer: the optimizer object for the training process.
-    :param criterion: the criterion object for the training process.
+    :param model: the model we're currently training_oh
+    :param data_iterator: an iterator, iterating over the training_oh data for the model.
+    :param optimizer: the optimizer object for the training_oh process.
+    :param criterion: the criterion object for the training_oh process.
     """
-    loss, accuracy = 0, 0
-    num_of_samples = len(data_iterator)
+    model.train()
     for (X, y) in data_iterator:
-        predict = model(X).reshape(y.shape)
         optimizer.zero_grad()
-        l = criterion(predict, y)
-        loss += l.item()
-        accuracy += binary_accuracy(predict, y)
-        l.backward()
+        predict = model.forward(X).reshape(y.shape)
+        loss = criterion(predict, y)
+        loss.backward()
         optimizer.step()
-    return loss / num_of_samples, accuracy / num_of_samples
 
 
 def evaluate(model, data_iterator, criterion):
@@ -355,24 +357,20 @@ def evaluate(model, data_iterator, criterion):
     :param data_iterator: torch data iterator for the relevant subset
     :param criterion: the loss criterion used for evaluation
     :return: tuple of (average loss over all examples, average accuracy over all examples)
-    ima of amir
     """
     loss = 0
-    acccuracy = 0
-    num_of_samples = len(data_iterator)
+    accuracy = 0
+    num_of_batches = len(data_iterator)
+    model.eval()
+    for (X, y) in data_iterator:
+        pred = model.forward(X)
+        reshapedY = torch.reshape(y, pred.shape)
+        loss += criterion(pred, reshapedY)
+        accuracy += binary_accuracy(pred, reshapedY)
+    loss /= num_of_batches
+    accuracy /= num_of_batches
 
-    with torch.no_grad():
-        for (X,y) in data_iterator:
-            pred = model(X)
-            reshapedY = torch.reshape(y, pred.shape)
-            loss += criterion(pred, reshapedY)
-            acccuracy += binary_accuracy(pred, reshapedY)
-
-    loss /= num_of_samples
-    acccuracy /= num_of_samples
-
-    print(f"Test Error: \n Accuracy: {(100 * acccuracy):>0.1f}%, Avg loss: {loss:>8f} \n")
-    return loss, acccuracy
+    return loss, accuracy
 
 
 def get_predictions_for_data(model, data_iter):
@@ -396,13 +394,13 @@ def get_predictions_for_data(model, data_iter):
     return predictions
 
 
-def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
+def train_model(model, data_manager, n_epochs, lr, weight_decay=0., t='oh'):
     """
-    Runs the full training procedure for the given model. The optimization should be done using the Adam
+    Runs the full training_oh procedure for the given model. The optimization should be done using the Adam
     optimizer with all parameters but learning rate and weight decay set to default.
     :param model: module of one of the models implemented in the exercise
     :param data_manager: the DataManager object
-    :param n_epochs: number of times to go over the whole training set
+    :param n_epochs: number of times to go over the whole training_oh set
     :param lr: learning rate to be used for optimization
     :param weight_decay: parameter for l2 regularization
     """
@@ -411,8 +409,16 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     train_loss, train_accuracy = np.zeros(n_epochs, dtype='float32'), np.zeros(n_epochs, dtype='float32')
     val_loss, val_accuracy = np.zeros(n_epochs, dtype='float32'), np.zeros(n_epochs, dtype='float32')
     for r in range(n_epochs):
-        train_loss[r], train_accuracy[r] = train_epoch(model, data_manager.get_torch_iterator(), optimizer, loss_function)
+        if os.path.exists(f"training_{t}/epoch_{str(r)}"):
+            model, optimizer, _ = load(model, f"training_{t}/epoch_{str(r)}", optimizer)
+        else:
+            train_epoch(model, data_manager.get_torch_iterator(), optimizer, loss_function)
+            save_model(model, f"training_{t}/epoch_{str(r)}", r, optimizer)
+        train_loss[r], train_accuracy[r] = evaluate(model, data_manager.get_torch_iterator(), loss_function)
+        print(f"Train Error for epoch-{r}: \n Accuracy: {(100 * train_accuracy[r]):>0.1f}%, Avg loss:"
+              f" {train_loss[r]:>8f} \n")
         val_loss[r], val_accuracy[r] = evaluate(model, data_manager.get_torch_iterator(VAL), loss_function)
+        print(f"Val Error for epoch-{r}: \n Accuracy: {(100 * val_accuracy[r]):>0.1f}%, Avg loss: {val_loss[r]:>8f} \n")
 
     return train_loss, train_accuracy, val_loss, val_accuracy
 
@@ -420,13 +426,13 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
 
 def train_log_linear_with_one_hot():
     """
-    Here comes your code for training and evaluation of the log linear model with one hot representation.
+    Here comes your code for training_oh and evaluation of the log linear model with one hot representation.
     """
-    dm = DataManager()
+    dm = DataManager(batch_size=64)
     m = LogLinear(dm.get_input_shape()[0])
-    train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 20, 0.01, 0.001)
+    train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 20, 0.01, 0.001, "oh")
     n_epochs = len(train_loss)
-    epochs = np.arange(1,n_epochs)
+    epochs = np.arange(1,n_epochs + 1)
 
     plt.plot(epochs, train_loss, color='r', label='Train loss')
     plt.plot(epochs, val_loss, color='g', label='Validation loss')
@@ -447,26 +453,29 @@ def train_log_linear_with_one_hot():
     test_loss, test_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=TEST), nn.BCEWithLogitsLoss())
     rare_loss, rare_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=RARE), nn.BCEWithLogitsLoss())
     polar_loss, polar_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=POLAR), nn.BCEWithLogitsLoss())
+    print(f"the test loss is- {test_loss}, the test accuracy is- {test_accuracy}")
+    print(f"the rare loss is- {rare_loss}, the rare accuracy is- {rare_accuracy}")
+    print(f"the polar loss is- {polar_loss}, the polar accuracy is- {polar_accuracy}")
 
-    plt.plot(epochs, test_loss, color='r', label='Overall test loss')
-    plt.plot(epochs, rare_loss, color='g', label='Test loss over rare words')
-    plt.plot(epochs, polar_loss, color='b', label='Test loss over polar words')
-
-    plt.xlabel("Number of Epochs")
-    plt.ylabel("Loss")
-    plt.title("Test loss")
-    plt.legend()
-    plt.show()
-
-    plt.plot(epochs, test_accuracy, color='r', label='Overall test accuracy')
-    plt.plot(epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
-    plt.plot(epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
-
-    plt.xlabel("Number of Epochs")
-    plt.ylabel("accuracy")
-    plt.title("Test accuracy")
-    plt.legend()
-    plt.show()
+    # plt.plot(epochs, test_loss, color='r', label='Overall test loss')
+    # plt.plot(epochs, rare_loss, color='g', label='Test loss over rare words')
+    # plt.plot(epochs, polar_loss, color='b', label='Test loss over polar words')
+    #
+    # plt.xlabel("Number of Epochs")
+    # plt.ylabel("Loss")
+    # plt.title("Test loss")
+    # plt.legend()
+    # plt.show()
+    #
+    # plt.plot(epochs, test_accuracy, color='r', label='Overall test accuracy')
+    # plt.plot(epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
+    # plt.plot(epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
+    #
+    # plt.xlabel("Number of Epochs")
+    # plt.ylabel("accuracy")
+    # plt.title("Test accuracy")
+    # plt.legend()
+    # plt.show()
 
 
 
@@ -488,15 +497,42 @@ def get_rare_polar(dm, subset):
 
 def train_log_linear_with_w2v():
     """
-    Here comes your code for training and evaluation of the log linear model with word embeddings
+    Here comes your code for training_oh and evaluation of the log linear model with word embeddings
     representation.
     """
-    return
+    dm = DataManager(data_type=W2V_AVERAGE, batch_size=64, embedding_dim=300)
+    m = LogLinear(dm.get_input_shape()[0])
+    train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 20, 0.01, 0.001, "w2v")
+    n_epochs = len(train_loss)
+    epochs = np.arange(1, n_epochs + 1)
+
+    plt.plot(epochs, train_loss, color='r', label='Train loss')
+    plt.plot(epochs, val_loss, color='g', label='Validation loss')
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Loss")
+    plt.title("Train and Validation loss over number epochs")
+    plt.legend()
+    plt.show()
+
+    plt.plot(epochs, train_accuracy, color='r', label='Train accuracy')
+    plt.plot(epochs, val_accuracy, color='g', label='Validation accuracy')
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Train and Validation accuracy over number epochs")
+    plt.legend()
+    plt.show()
+
+    test_loss, test_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=TEST), nn.BCEWithLogitsLoss())
+    rare_loss, rare_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=RARE), nn.BCEWithLogitsLoss())
+    polar_loss, polar_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=POLAR), nn.BCEWithLogitsLoss())
+    print(f"the test loss is- {test_loss}, the test accuracy is- {test_accuracy}")
+    print(f"the rare loss is- {rare_loss}, the rare accuracy is- {rare_accuracy}")
+    print(f"the polar loss is- {polar_loss}, the polar accuracy is- {polar_accuracy}")
 
 
 def train_lstm_with_w2v():
     """
-    Here comes your code for training and evaluation of the LSTM model.
+    Here comes your code for training_oh and evaluation of the LSTM model.
     """
     return
 
@@ -511,4 +547,5 @@ if __name__ == '__main__':
     # criterion = nn.BCEWithLogitsLoss()
     # train_epoch(m, dm.get_torch_iterator(), optemizer, criterion)
 
-    train_log_linear_with_one_hot()
+    train_log_linear_with_w2v()
+
