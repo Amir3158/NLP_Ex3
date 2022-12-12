@@ -159,7 +159,7 @@ def get_word_to_ind(words_list):
     return {w: i for i, w in enumerate(words_list)}
 
 
-def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
+def sentence_to_embedding(sent, word_to_vec, seq_len = 52 , embedding_dim=300):
     """
     this method gets a sentence and a word to vector mapping, and returns a list containing the
     words embeddings of the tokens in the sentence.
@@ -169,7 +169,23 @@ def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
     :param embedding_dim: the dimension of the w2v embedding
     :return: numpy ndarray of shape (seq_len, embedding_dim) with the representation of the sentence
     """
-    return
+    length = len(sent)
+    res = []
+
+    if (length > seq_len):
+        sent = sent[:52]
+        res = [word_to_vec[word] for word in sent]
+
+    elif (length < seq_len):
+        res = [word_to_vec[word] for word in sent]
+        for i in range(seq_len - length):
+            res.append(0)
+
+    else:
+        res = [word_to_vec[word] for word in sent]
+
+    return np.array(res)
+
 
 
 class OnlineDataset(Dataset):
