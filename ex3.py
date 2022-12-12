@@ -318,12 +318,12 @@ def binary_accuracy(preds, y):
     :param y: a vector of true labels
     :return: scalar value - (<number of accurate predictions> / <number of examples>)
     """
-    assert preds.size == y.size
+    assert preds.size() == y.size()
     correct = 0
     for i, p in enumerate(preds):
-        if np.round(p) == y[i]:
+        if torch.round(p) == y[i]:
             correct += 1
-    return correct / y.size
+    return correct / len(y)
 
 
 def train_epoch(model, data_iterator, optimizer, criterion):
@@ -339,10 +339,10 @@ def train_epoch(model, data_iterator, optimizer, criterion):
     num_of_samples = len(data_iterator)
     for (X, y) in data_iterator:
         predict = model(X).reshape(y.shape)
+        optimizer.zero_grad()
         l = criterion(predict, y)
         loss += l.item()
         accuracy += binary_accuracy(predict, y)
-        optimizer.zero_grad()
         l.backward()
         optimizer.step()
     return loss / num_of_samples, accuracy / num_of_samples
@@ -364,8 +364,10 @@ def evaluate(model, data_iterator, criterion):
     with torch.no_grad():
         for (X,y) in data_iterator:
             pred = model(X)
-            loss += criterion(pred, y)
-            acccuracy += binary_accuracy(pred, y)
+            reshapedY = torch.reshape(y, pred.shape)
+            loss += criterion(pred, reshapedY)
+            acccuracy += binary_accuracy(pred, reshapedY)
+
     loss /= num_of_samples
     acccuracy /= num_of_samples
 
@@ -404,7 +406,7 @@ def train_model(model, data_manager, n_epochs, lr, weight_decay=0.):
     :param lr: learning rate to be used for optimization
     :param weight_decay: parameter for l2 regularization
     """
-    optimizer = torch.optim.Adam(m.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_function = nn.BCEWithLogitsLoss()
     train_loss, train_accuracy = np.zeros(n_epochs, dtype='float32'), np.zeros(n_epochs, dtype='float32')
     val_loss, val_accuracy = np.zeros(n_epochs, dtype='float32'), np.zeros(n_epochs, dtype='float32')
@@ -421,20 +423,21 @@ def train_log_linear_with_one_hot():
     Here comes your code for training and evaluation of the log linear model with one hot representation.
     """
     dm = DataManager()
-    m = LogLinear(dm.get_input_shape())
+    m = LogLinear(dm.get_input_shape()[0])
     train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 20, 0.01, 0.001)
     n_epochs = len(train_loss)
+    epochs = np.arange(1,n_epochs)
 
-    plt.plot(n_epochs, train_loss, color='r', label='Train loss')
-    plt.plot(n_epochs, val_loss, color='g', label='Validation loss')
+    plt.plot(epochs, train_loss, color='r', label='Train loss')
+    plt.plot(epochs, val_loss, color='g', label='Validation loss')
     plt.xlabel("Number of Epochs")
     plt.ylabel("Loss")
     plt.title("Train and Validation loss over number epochs")
     plt.legend()
     plt.show()
 
-    plt.plot(n_epochs, train_accuracy, color='r', label='Train accuracy')
-    plt.plot(n_epochs, val_accuracy, color='g', label='Validation accuracy')
+    plt.plot(epochs, train_accuracy, color='r', label='Train accuracy')
+    plt.plot(epochs, val_accuracy, color='g', label='Validation accuracy')
     plt.xlabel("Number of Epochs")
     plt.ylabel("Accuracy")
     plt.title("Train and Validation accuracy over number epochs")
@@ -445,9 +448,9 @@ def train_log_linear_with_one_hot():
     rare_loss, rare_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=RARE), nn.BCEWithLogitsLoss())
     polar_loss, polar_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=POLAR), nn.BCEWithLogitsLoss())
 
-    plt.plot(n_epochs, test_loss, color='r', label='Overall test loss')
-    plt.plot(n_epochs, rare_loss, color='g', label='Test loss over rare words')
-    plt.plot(n_epochs, polar_loss, color='b', label='Test loss over polar words')
+    plt.plot(epochs, test_loss, color='r', label='Overall test loss')
+    plt.plot(epochs, rare_loss, color='g', label='Test loss over rare words')
+    plt.plot(epochs, polar_loss, color='b', label='Test loss over polar words')
 
     plt.xlabel("Number of Epochs")
     plt.ylabel("Loss")
@@ -455,9 +458,9 @@ def train_log_linear_with_one_hot():
     plt.legend()
     plt.show()
 
-    plt.plot(n_epochs, test_accuracy, color='r', label='Overall test accuracy')
-    plt.plot(n_epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
-    plt.plot(n_epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
+    plt.plot(epochs, test_accuracy, color='r', label='Overall test accuracy')
+    plt.plot(epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
+    plt.plot(epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
 
     plt.xlabel("Number of Epochs")
     plt.ylabel("accuracy")
@@ -474,18 +477,13 @@ def get_rare_polar(dm, subset):
         ind = data_loader.get_rare_words_examples(test_data, dm.sentiment_dataset)
 
     elif subset == POLAR:
-        ind = data_loader.get_negated_polarity_examples(test_data, dm.sentiment_dataset)
+        ind = data_loader.get_negated_polarity_examples(test_data)
 
     res = []
     for i in ind:
         res.append(test_data[i])
 
     return res
-
-
-
-
-
 
 
 def train_log_linear_with_w2v():
@@ -507,8 +505,10 @@ if __name__ == '__main__':
     # train_log_linear_with_one_hot()
     # train_log_linear_with_w2v()
     # train_lstm_with_w2v()
-    dm = DataManager()
-    m = LogLinear(dm.get_input_shape()[0])
-    optemizer = torch.optim.Adam(m.parameters(), lr=0.05)
-    criterion = nn.BCEWithLogitsLoss()
-    train_epoch(m, dm.get_torch_iterator(), optemizer, criterion)
+    # dm = DataManager()
+    # m = LogLinear(dm.get_input_shape()[0])
+    # optemizer = torch.optim.Adam(m.parameters(), lr=0.05)
+    # criterion = nn.BCEWithLogitsLoss()
+    # train_epoch(m, dm.get_torch_iterator(), optemizer, criterion)
+
+    train_log_linear_with_one_hot()
