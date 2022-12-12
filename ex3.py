@@ -159,7 +159,7 @@ def get_word_to_ind(words_list):
     return {w: i for i, w in enumerate(words_list)}
 
 
-def sentence_to_embedding(sent, word_to_vec, seq_len = 52 , embedding_dim=300):
+def sentence_to_embedding(sent, word_to_vec, seq_len, embedding_dim=300):
     """
     this method gets a sentence and a word to vector mapping, and returns a list containing the
     words embeddings of the tokens in the sentence.
@@ -170,16 +170,15 @@ def sentence_to_embedding(sent, word_to_vec, seq_len = 52 , embedding_dim=300):
     :return: numpy ndarray of shape (seq_len, embedding_dim) with the representation of the sentence
     """
     length = len(sent)
-    res = []
 
     if (length > seq_len):
-        sent = sent[:52]
+        sent = sent[:seq_len]
         res = [word_to_vec[word] for word in sent]
 
     elif (length < seq_len):
         res = [word_to_vec[word] for word in sent]
         for i in range(seq_len - length):
-            res.append(0)
+            res.append(np.zeros(embedding_dim))         ##TODO: check dim for zeros
 
     else:
         res = [word_to_vec[word] for word in sent]
@@ -304,13 +303,22 @@ class LSTM(nn.Module):
     """
 
     def __init__(self, embedding_dim, hidden_dim, n_layers, dropout):
-        return
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.module = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout, bidirectional=True, batch_first=True)
+        self.linear = nn.Linear(2 * hidden_dim, 1)
+
 
     def forward(self, text):
-        return
+        forward_lstm = self.module(text)
+        regular = forward_lstm[:, -1, : self.hidden_dim]
+        reverse = forward_lstm[:, 0, : self.hidden_dim]
+
+        return self.linear(torch.cat([regular, reverse], dim=1))
+
 
     def predict(self, text):
-        return
+        return torch.sigmoid(self.linear(self.moduletext))
 
 
 class LogLinear(nn.Module):
@@ -473,25 +481,6 @@ def train_log_linear_with_one_hot():
     print(f"the rare loss is- {rare_loss}, the rare accuracy is- {rare_accuracy}")
     print(f"the polar loss is- {polar_loss}, the polar accuracy is- {polar_accuracy}")
 
-    # plt.plot(epochs, test_loss, color='r', label='Overall test loss')
-    # plt.plot(epochs, rare_loss, color='g', label='Test loss over rare words')
-    # plt.plot(epochs, polar_loss, color='b', label='Test loss over polar words')
-    #
-    # plt.xlabel("Number of Epochs")
-    # plt.ylabel("Loss")
-    # plt.title("Test loss")
-    # plt.legend()
-    # plt.show()
-    #
-    # plt.plot(epochs, test_accuracy, color='r', label='Overall test accuracy')
-    # plt.plot(epochs, rare_accuracy, color='g', label='Test accuracy over rare words')
-    # plt.plot(epochs, polar_accuracy, color='b', label='Test accuracy over polar words')
-    #
-    # plt.xlabel("Number of Epochs")
-    # plt.ylabel("accuracy")
-    # plt.title("Test accuracy")
-    # plt.legend()
-    # plt.show()
 
 
 
@@ -516,7 +505,7 @@ def train_log_linear_with_w2v():
     Here comes your code for training_oh and evaluation of the log linear model with word embeddings
     representation.
     """
-    dm = DataManager(data_type=W2V_AVERAGE, batch_size=64, embedding_dim=300)
+    dm = DataManager(data_type=W2V_AVERAGE, batch_size=64, embedding_dim=W2V_EMBEDDING_DIM)
     m = LogLinear(dm.get_input_shape()[0])
     train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 20, 0.01, 0.001, "w2v")
     n_epochs = len(train_loss)
@@ -547,10 +536,34 @@ def train_log_linear_with_w2v():
 
 
 def train_lstm_with_w2v():
-    """
-    Here comes your code for training_oh and evaluation of the LSTM model.
-    """
-    return
+    dm = DataManager(data_type=W2V_SEQUENCE, batch_size=64, embedding_dim=300)
+    m = LSTM(W2V_EMBEDDING_DIM, 100, 2, 0.5)
+    train_loss, train_accuracy, val_loss, val_accuracy = train_model(m, dm, 4, 0.01, 0.0001, "lstm")
+    n_epochs = len(train_loss)
+    epochs = np.arange(1, n_epochs + 1)
+
+    plt.plot(epochs, train_loss, color='r', label='Train loss')
+    plt.plot(epochs, val_loss, color='g', label='Validation loss')
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Loss")
+    plt.title("Train and Validation loss over number epochs")
+    plt.legend()
+    plt.show()
+
+    plt.plot(epochs, train_accuracy, color='r', label='Train accuracy')
+    plt.plot(epochs, val_accuracy, color='g', label='Validation accuracy')
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Train and Validation accuracy over number epochs")
+    plt.legend()
+    plt.show()
+
+    test_loss, test_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=TEST), nn.BCEWithLogitsLoss())
+    rare_loss, rare_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=RARE), nn.BCEWithLogitsLoss())
+    polar_loss, polar_accuracy = evaluate(m, dm.get_torch_iterator(data_subset=POLAR), nn.BCEWithLogitsLoss())
+    print(f"the test loss is- {test_loss}, the test accuracy is- {test_accuracy}")
+    print(f"the rare loss is- {rare_loss}, the rare accuracy is- {rare_accuracy}")
+    print(f"the polar loss is- {polar_loss}, the polar accuracy is- {polar_accuracy}")
 
 
 if __name__ == '__main__':
@@ -563,5 +576,5 @@ if __name__ == '__main__':
     # criterion = nn.BCEWithLogitsLoss()
     # train_epoch(m, dm.get_torch_iterator(), optemizer, criterion)
 
-    train_log_linear_with_w2v()
+    train_lstm_with_w2v()
 
